@@ -30,6 +30,16 @@ const UI_PATH = "/";
 const indexApiSchema = z.object({
   paths: z.array(z.string()).min(1),
 });
+const indexTextApiSchema = z.object({
+  documents: z
+    .array(
+      z.object({
+        source: z.string().min(1),
+        content: z.string().min(1),
+      }),
+    )
+    .min(1),
+});
 const searchApiSchema = z.object({
   query: z.string().min(2),
   top_k: z.number().int().min(1).max(20).optional(),
@@ -233,6 +243,17 @@ async function handleApiRequest(
       return;
     }
     const result = await qaService.indexDocuments(parsed.data.paths);
+    writeJson(res, 200, result);
+    return;
+  }
+
+  if (pathname === "/api/index-text") {
+    const parsed = indexTextApiSchema.safeParse(body);
+    if (!parsed.success) {
+      writeJson(res, 400, { error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+    const result = await qaService.indexRawDocuments(parsed.data.documents);
     writeJson(res, 200, result);
     return;
   }

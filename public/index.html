@@ -134,8 +134,12 @@
           <h2>1) Index Documents</h2>
           <textarea id="paths">docs/sample-api.md
 docs/sample-oncall.md</textarea>
+          <div style="margin-top: 8px">
+            <input id="files" type="file" multiple accept=".md,.txt,text/markdown,text/plain" />
+          </div>
           <div class="actions">
             <button id="indexBtn">Index</button>
+            <button id="uploadIndexBtn" class="secondary">Upload + Index</button>
             <button id="sourcesBtn" class="secondary">List Sources</button>
           </div>
         </div>
@@ -222,6 +226,29 @@ docs/sample-oncall.md</textarea>
         try {
           const query = document.getElementById("question").value;
           const data = await callApi("/api/search", "POST", { query });
+          setOutput(data);
+        } catch (error) {
+          setOutput(String(error));
+        }
+      });
+
+      document.getElementById("uploadIndexBtn").addEventListener("click", async () => {
+        try {
+          const fileInput = document.getElementById("files");
+          const files = fileInput.files ? Array.from(fileInput.files) : [];
+          if (!files.length) {
+            setOutput("Select one or more .md/.txt files first.");
+            return;
+          }
+
+          const documents = await Promise.all(
+            files.map(async (file) => ({
+              source: file.name,
+              content: await file.text(),
+            })),
+          );
+
+          const data = await callApi("/api/index-text", "POST", { documents });
           setOutput(data);
         } catch (error) {
           setOutput(String(error));

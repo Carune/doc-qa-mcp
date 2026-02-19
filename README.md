@@ -53,6 +53,7 @@ http://localhost:3000/
 ## REST API
 
 - `POST /api/index`
+- `POST /api/index-text` (업로드 텍스트 직접 인덱싱)
 - `GET /api/sources`
 - `POST /api/search`
 - `POST /api/ask`
@@ -62,6 +63,19 @@ http://localhost:3000/
 ```json
 {
   "paths": ["docs/sample-api.md", "docs/sample-oncall.md"]
+}
+```
+
+업로드 텍스트 예시:
+
+```json
+{
+  "documents": [
+    {
+      "source": "manual-es.txt",
+      "content": "Cuando ocurre un incidente, primero identifique el alcance del impacto."
+    }
+  ]
 }
 ```
 
@@ -122,6 +136,11 @@ VECTOR_DIMENSION=1536
 docker compose up -d
 npm run dev
 ```
+
+언어 관련 참고:
+
+- 기본 lexical 모드는 문서 언어와 질문 언어를 맞춰야 정확합니다.
+- 교차언어(예: 스페인어 문서 + 한글 질문)는 semantic 모드에서 훨씬 유리합니다.
 
 ## 로드맵
 

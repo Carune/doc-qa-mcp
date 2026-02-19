@@ -62,6 +62,27 @@ describe("HTTP API integration", () => {
     expect(askData.citations.length).toBeGreaterThan(0);
     expect(askData.retrieval_mode).toBe("lexical");
   });
+
+  it("indexes raw uploaded text via /api/index-text", async () => {
+    const response = await fetch(`${BASE_URL}/api/index-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        documents: [
+          {
+            source: "manual-es.txt",
+            content:
+              "Cuando ocurre un incidente, primero identifique el alcance del impacto.",
+          },
+        ],
+      }),
+    });
+
+    expect(response.ok).toBe(true);
+    const data = (await response.json()) as { indexed_count: number; failed: unknown[] };
+    expect(data.indexed_count).toBe(1);
+    expect(data.failed).toHaveLength(0);
+  });
 });
 
 async function waitForHealthy() {

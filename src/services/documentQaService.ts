@@ -17,6 +17,11 @@ export interface IndexDocumentsResult {
   failed: FailedIndexing[];
 }
 
+export interface RawDocumentInput {
+  source: string;
+  content: string;
+}
+
 export interface SearchChunksResult {
   query: string;
   retrieval_mode: "semantic" | "lexical";
@@ -56,29 +61,50 @@ export class DocumentQaService {
         assertSupportedExtension(absolutePath);
 
         const content = await fs.readFile(absolutePath, "utf-8");
-        const chunks = splitIntoChunks(content);
-        const embeddings = this.aiClient.isConfigured()
-          ? await this.aiClient.embedTexts(chunks)
-          : [];
-
-        if (embeddings.length > 0 && embeddings.length !== chunks.length) {
-          throw new Error("Embedding count mismatch.");
-        }
-
-        await this.knowledgeBase.upsertSource({
-          path: absolutePath,
-          chunks: chunks.map((chunk, index) => ({
-            index,
-            text: chunk,
-            embedding: embeddings[index] ?? null,
-          })),
+        const saved = await this.indexSingleDocument({
+          sourcePath: absolutePath,
+          content,
         });
 
         indexedCount += 1;
-        chunkCount += chunks.length;
+        chunkCount += saved.chunkCount;
       } catch (error) {
         failed.push({
           path: rawPath,
+          reason: error instanceof Error ? error.message : "unknown error",
+        });
+      }
+    }
+
+    return {
+      indexed_count: indexedCount,
+      chunk_count: chunkCount,
+      embedding_enabled: this.aiClient.isConfigured(),
+      failed,
+    };
+  }
+
+  async indexRawDocuments(documents: RawDocumentInput[]): Promise<IndexDocumentsResult> {
+    const failed: FailedIndexing[] = [];
+    let indexedCount = 0;
+    let chunkCount = 0;
+
+    for (let index = 0; index < documents.length; index += 1) {
+      const item = documents[index];
+      const source = normalizeSourceName(item.source, index);
+      try {
+        if (!item.content.trim()) {
+          throw new Error("Empty content.");
+        }
+        const saved = await this.indexSingleDocument({
+          sourcePath: `upload://${source}`,
+          content: item.content,
+        });
+        indexedCount += 1;
+        chunkCount += saved.chunkCount;
+      } catch (error) {
+        failed.push({
+          path: source,
           reason: error instanceof Error ? error.message : "unknown error",
         });
       }
@@ -157,6 +183,28 @@ export class DocumentQaService {
       latency_ms: Date.now() - startedAt,
     };
   }
+
+  private async indexSingleDocument(input: { sourcePath: string; content: string }) {
+    const chunks = splitIntoChunks(input.content);
+    const embeddings = this.aiClient.isConfigured()
+      ? await this.aiClient.embedTexts(chunks)
+      : [];
+
+    if (embeddings.length > 0 && embeddings.length !== chunks.length) {
+      throw new Error("Embedding count mismatch.");
+    }
+
+    await this.knowledgeBase.upsertSource({
+      path: input.sourcePath,
+      chunks: chunks.map((chunk, index) => ({
+        index,
+        text: chunk,
+        embedding: embeddings[index] ?? null,
+      })),
+    });
+
+    return { chunkCount: chunks.length };
+  }
 }
 
 function assertSupportedExtension(filePath: string) {
@@ -186,4 +234,12 @@ function buildGuidance(
   }
 
   return "No lexical matches. Try using exact keywords from the document or enable semantic mode.";
+}
+
+function normalizeSourceName(source: string, index: number): string {
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return `uploaded-${index + 1}.txt`;
+  }
+  return trimmed.replace(/[\\/:*?"<>|]/g, "_");
 }
