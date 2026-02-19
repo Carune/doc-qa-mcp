@@ -1,9 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { InMemoryKnowledgeBase } from "../infra/store/inMemoryKnowledgeBase.js";
+import { KnowledgeBase } from "../domain/knowledgeBase.js";
 
 export function registerListSourcesTool(
   server: McpServer,
-  knowledgeBase: InMemoryKnowledgeBase,
+  knowledgeBase: KnowledgeBase,
 ) {
   server.registerTool(
     "list_sources",
@@ -13,7 +13,7 @@ export function registerListSourcesTool(
       inputSchema: {},
     },
     async () => {
-      const sources = knowledgeBase.listSources();
+      const sources = await knowledgeBase.listSources();
 
       return {
         content: [

@@ -2,7 +2,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { InMemoryKnowledgeBase } from "../infra/store/inMemoryKnowledgeBase.js";
+import { KnowledgeBase } from "../domain/knowledgeBase.js";
+import { OpenAiClient } from "../infra/ai/openAiClient.js";
 import { splitIntoChunks } from "../pipelines/chunking.js";
 
 interface FailedIndexing {
@@ -12,7 +13,8 @@ interface FailedIndexing {
 
 export function registerIndexDocumentsTool(
   server: McpServer,
-  knowledgeBase: InMemoryKnowledgeBase,
+  knowledgeBase: KnowledgeBase,
+  aiClient: OpenAiClient,
 ) {
   server.registerTool(
     "index_documents",
@@ -36,10 +38,21 @@ export function registerIndexDocumentsTool(
 
           const content = await fs.readFile(absolutePath, "utf-8");
           const chunks = splitIntoChunks(content);
+          const embeddings = aiClient.isConfigured()
+            ? await aiClient.embedTexts(chunks)
+            : [];
 
-          knowledgeBase.upsertSource({
+          if (embeddings.length > 0 && embeddings.length !== chunks.length) {
+            throw new Error("Embedding count mismatch.");
+          }
+
+          await knowledgeBase.upsertSource({
             path: absolutePath,
-            chunks,
+            chunks: chunks.map((chunk, index) => ({
+              index,
+              text: chunk,
+              embedding: embeddings[index] ?? null,
+            })),
           });
 
           indexedCount += 1;
@@ -60,6 +73,7 @@ export function registerIndexDocumentsTool(
               {
                 indexed_count: indexedCount,
                 chunk_count: chunkCount,
+                embedding_enabled: aiClient.isConfigured(),
                 failed,
               },
               null,

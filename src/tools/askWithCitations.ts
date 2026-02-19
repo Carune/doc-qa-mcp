@@ -1,11 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { InMemoryKnowledgeBase } from "../infra/store/inMemoryKnowledgeBase.js";
+import { KnowledgeBase } from "../domain/knowledgeBase.js";
+import { OpenAiClient } from "../infra/ai/openAiClient.js";
 import { buildAnswerWithCitations } from "../pipelines/answering.js";
 
 export function registerAskWithCitationsTool(
   server: McpServer,
-  knowledgeBase: InMemoryKnowledgeBase,
+  knowledgeBase: KnowledgeBase,
+  aiClient: OpenAiClient,
 ) {
   server.registerTool(
     "ask_with_citations",
@@ -23,8 +25,34 @@ export function registerAskWithCitationsTool(
     },
     async ({ question, top_k, source_filter }) => {
       const startedAt = Date.now();
-      const hits = knowledgeBase.search(question, top_k ?? 3, source_filter);
+      const queryEmbedding = aiClient.isConfigured()
+        ? await aiClient.embedQuery(question)
+        : null;
+      const hits = await knowledgeBase.search({
+        query: question,
+        queryEmbedding,
+        topK: top_k ?? 3,
+        sourcePaths: source_filter,
+      });
       const result = buildAnswerWithCitations(question, hits);
+      let answer = result.answer;
+      if (aiClient.isConfigured() && result.citations.length > 0) {
+        try {
+          const modelAnswer = await aiClient.generateGroundedAnswer(
+            question,
+            result.citations.slice(0, 5).map((citation) => ({
+              source: citation.source,
+              chunkIndex: citation.chunk_index,
+              snippet: citation.snippet,
+            })),
+          );
+          if (modelAnswer) {
+            answer = modelAnswer;
+          }
+        } catch {
+          // Keep deterministic fallback answer when LLM call fails.
+        }
+      }
       const latencyMs = Date.now() - startedAt;
 
       return {
@@ -33,7 +61,7 @@ export function registerAskWithCitationsTool(
             type: "text",
             text: JSON.stringify(
               {
-                answer: result.answer,
+                answer,
                 citations: result.citations,
                 latency_ms: latencyMs,
               },

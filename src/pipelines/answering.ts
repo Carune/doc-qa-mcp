@@ -1,5 +1,13 @@
 import { SearchResult } from "../domain/types.js";
 
+export interface Citation {
+  source: string;
+  chunk_id: string;
+  chunk_index: number;
+  score: number;
+  snippet: string;
+}
+
 export function buildAnswerWithCitations(
   question: string,
   hits: SearchResult[],
@@ -7,7 +15,7 @@ export function buildAnswerWithCitations(
   if (hits.length === 0) {
     return {
       answer:
-        "질문과 관련된 문서를 찾지 못했습니다. 다른 키워드로 질문하거나 문서를 먼저 인덱싱해 주세요.",
+        "No relevant context was found in indexed documents. Try a more specific question.",
       citations: [],
     };
   }
@@ -20,36 +28,24 @@ export function buildAnswerWithCitations(
     snippet: hit.chunk.text.slice(0, 280),
   }));
 
-  const answerLines: string[] = [
-    `질문: ${question}`,
-    "문서 근거 기반 요약:",
-  ];
-
+  const lines = [`Question: ${question}`, "Context-grounded summary:"];
   for (let i = 0; i < Math.min(hits.length, 3); i += 1) {
     const hit = hits[i];
-    answerLines.push(
-      `${i + 1}. ${summarizeChunk(hit.chunk.text)} (출처: ${hit.source.path}#${hit.chunk.index})`,
+    lines.push(
+      `${i + 1}. ${summarizeChunk(hit.chunk.text)} (source: ${hit.source.path}#${hit.chunk.index})`,
     );
   }
 
   return {
-    answer: answerLines.join("\n"),
+    answer: lines.join("\n"),
     citations,
   };
 }
 
-interface Citation {
-  source: string;
-  chunk_id: string;
-  chunk_index: number;
-  score: number;
-  snippet: string;
-}
-
 function summarizeChunk(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
-  if (normalized.length <= 160) {
+  if (normalized.length <= 180) {
     return normalized;
   }
-  return `${normalized.slice(0, 157)}...`;
+  return `${normalized.slice(0, 177)}...`;
 }

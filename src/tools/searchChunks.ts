@@ -1,10 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { InMemoryKnowledgeBase } from "../infra/store/inMemoryKnowledgeBase.js";
+import { KnowledgeBase } from "../domain/knowledgeBase.js";
+import { OpenAiClient } from "../infra/ai/openAiClient.js";
 
 export function registerSearchChunksTool(
   server: McpServer,
-  knowledgeBase: InMemoryKnowledgeBase,
+  knowledgeBase: KnowledgeBase,
+  aiClient: OpenAiClient,
 ) {
   server.registerTool(
     "search_chunks",
@@ -21,7 +23,15 @@ export function registerSearchChunksTool(
       },
     },
     async ({ query, top_k, source_filter }) => {
-      const hits = knowledgeBase.search(query, top_k ?? 5, source_filter);
+      const queryEmbedding = aiClient.isConfigured()
+        ? await aiClient.embedQuery(query)
+        : null;
+      const hits = await knowledgeBase.search({
+        query,
+        queryEmbedding,
+        topK: top_k ?? 5,
+        sourcePaths: source_filter,
+      });
 
       return {
         content: [
@@ -30,6 +40,7 @@ export function registerSearchChunksTool(
             text: JSON.stringify(
               {
                 query,
+                retrieval_mode: queryEmbedding ? "semantic" : "lexical",
                 hits: hits.map((hit) => ({
                   score: Number(hit.score.toFixed(4)),
                   source: hit.source.path,
