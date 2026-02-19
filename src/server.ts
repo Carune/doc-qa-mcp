@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import "dotenv/config";
 import { z } from "zod";
 import { loadConfig } from "./config/env.js";
 import { OpenAiClient } from "./infra/ai/openAiClient.js";
@@ -14,7 +15,6 @@ async function main() {
   const aiClient = new OpenAiClient({
     apiKey: config.openaiApiKey,
     embeddingModel: config.embeddingModel,
-    chatModel: config.chatModel,
   });
 
   if (config.enablePgvector && !aiClient.isConfigured()) {

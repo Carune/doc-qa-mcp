@@ -35,24 +35,6 @@ export function registerAskWithCitationsTool(
         sourcePaths: source_filter,
       });
       const result = buildAnswerWithCitations(question, hits);
-      let answer = result.answer;
-      if (aiClient.isConfigured() && result.citations.length > 0) {
-        try {
-          const modelAnswer = await aiClient.generateGroundedAnswer(
-            question,
-            result.citations.slice(0, 5).map((citation) => ({
-              source: citation.source,
-              chunkIndex: citation.chunk_index,
-              snippet: citation.snippet,
-            })),
-          );
-          if (modelAnswer) {
-            answer = modelAnswer;
-          }
-        } catch {
-          // Keep deterministic fallback answer when LLM call fails.
-        }
-      }
       const latencyMs = Date.now() - startedAt;
 
       return {
@@ -61,8 +43,9 @@ export function registerAskWithCitationsTool(
             type: "text",
             text: JSON.stringify(
               {
-                answer,
+                answer: result.answer,
                 citations: result.citations,
+                answer_generation_mode: "client_llm",
                 latency_ms: latencyMs,
               },
               null,

@@ -2,28 +2,31 @@
 
 문서 질의응답 포트폴리오용 MCP 서버입니다.
 
-초기에는 메모리 기반 키워드 검색 MVP로 시작했고, 현재는 아래 기능까지 포함합니다.
+핵심 방향:
 
-- `pgvector` 기반 의미 검색
-- OpenAI 기반 근거 답변 생성(옵션)
-- 답변별 출처(citation) 반환
+- 서버는 문서 인덱싱/검색/근거 반환만 담당
+- 최종 답변 생성은 ChatGPT 같은 MCP 클라이언트 LLM이 담당
 
-## 아키텍처
+즉, ChatGPT Pro 사용자라면 서버에서 별도 LLM API를 직접 호출하지 않아도 됩니다.
+
+## 동작 구조
 
 1. `index_documents`
-   - `.md` / `.txt` 파일 읽기
-   - 문서를 청크 단위로 분할
-   - (옵션) 청크 임베딩 생성
-   - 소스/청크 저장
+   - `.md` / `.txt` 파일을 읽고 청크로 분할
+   - 인덱스 저장
 2. `search_chunks`
-   - 메모리 모드: 토큰 겹침 기반 검색
-   - pgvector 모드: 벡터 유사도 검색
+   - 관련 청크 검색
 3. `ask_with_citations`
-   - 상위 청크 검색
-   - 답변 + 출처 반환
-   - OpenAI 키가 있으면 검색 컨텍스트 기반 모델 답변 생성
+   - 답변 초안 + 출처(citation) 반환
+   - 반환값의 `answer_generation_mode`는 항상 `client_llm`
 
-## 실행 (메모리 모드)
+## 실행 모드
+
+### 1) 기본 모드 (권장, API 키 불필요)
+
+- `ENABLE_PGVECTOR=false`
+- 인메모리 키워드 검색
+- ChatGPT가 도구 결과를 읽고 최종 답변 생성
 
 ```bash
 npm install
@@ -31,33 +34,39 @@ npm run build
 npm run dev
 ```
 
-메모리 모드는 별도 인프라가 필요 없습니다.
+### 2) 의미 검색 모드 (선택)
 
-## 실행 (pgvector + 의미 검색 모드)
-
-1. pgvector postgres 실행
+- `ENABLE_PGVECTOR=true`
+- `pgvector` + 임베딩 필요
+- 이 경우 `OPENAI_API_KEY`가 필요합니다 (임베딩 생성용)
 
 ```bash
 docker compose up -d
+npm run dev
 ```
 
-2. `.env.example` 복사 후 `.env` 생성
+## 환경변수 (`.env`)
+
+`.env.example`를 복사해 `.env`를 만드세요.
 
 ```bash
 cp .env.example .env
 ```
 
-필수 값:
+기본값 예시:
 
-- `ENABLE_PGVECTOR=true`
-- `DATABASE_URL=postgres://mcp:mcp@localhost:5432/mcp_doc_qa`
-- `OPENAI_API_KEY=...`
-
-3. 서버 실행
-
-```bash
-npm run dev
+```env
+ENABLE_PGVECTOR=false
+DATABASE_URL=postgres://mcp:mcp@localhost:5432/mcp_doc_qa
+OPENAI_API_KEY=
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+VECTOR_DIMENSION=1536
 ```
+
+참고:
+
+- `.env`는 `.gitignore`에 포함되어 커밋되지 않습니다.
+- 서버는 `dotenv`로 `.env`를 자동 로드합니다.
 
 ## MCP 도구 목록
 
@@ -67,7 +76,7 @@ npm run dev
 - `search_chunks`
 - `ask_with_citations`
 
-## 빠른 테스트 흐름 (MCP Inspector)
+## 빠른 테스트 (MCP Inspector)
 
 1. `index_documents`
 
@@ -75,25 +84,14 @@ npm run dev
 {"paths":["docs/sample-api.md","docs/sample-oncall.md"]}
 ```
 
-2. `list_sources`
-
-```json
-{}
-```
-
-3. `search_chunks`
+2. `search_chunks`
 
 ```json
 {"query":"장애 발생 시 가장 먼저 무엇을 확인해야 해?"}
 ```
 
-4. `ask_with_citations`
+3. `ask_with_citations`
 
 ```json
 {"question":"장애 대응 첫 단계가 뭐야?"}
 ```
-
-## 참고
-
-- `migrations/001_init_pgvector.sql` 파일을 제공하지만,
-  pgvector 모드에서는 서버 시작 시 extension/table/index를 자동 초기화합니다.
