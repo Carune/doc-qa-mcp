@@ -44,6 +44,12 @@ curl http://localhost:3000/healthz
 http://localhost:3000/
 ```
 
+언어 주의:
+
+- 기본(lexical) 모드에서는 문서 언어와 질문 언어가 같아야 검색 정확도가 높습니다.
+- 예: 영문 문서를 인덱싱했으면 영문 질문이 유리합니다.
+- 한글 질문도 가능하지만, 교차언어 검색은 semantic 모드에서 더 잘 동작합니다.
+
 ## REST API
 
 - `POST /api/index`

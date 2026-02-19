@@ -31,4 +31,22 @@ describe("DocumentQaService", () => {
     expect(askResult.answer.toLowerCase()).toContain("incident");
     expect(askResult.retrieval_mode).toBe("lexical");
   });
+
+  it("returns language guidance when lexical query language mismatches", async () => {
+    const service = new DocumentQaService(
+      new InMemoryKnowledgeBase(),
+      new OpenAiClient({
+        apiKey: null,
+        embeddingModel: "text-embedding-3-small",
+      }),
+    );
+
+    await service.indexDocuments([path.resolve("docs/sample-api.md")]);
+    const result = await service.askWithCitations({
+      question: "장애 대응 첫 단계가 뭐야?",
+    });
+
+    expect(result.citations).toHaveLength(0);
+    expect(result.guidance?.toLowerCase()).toContain("lexical mode");
+  });
 });

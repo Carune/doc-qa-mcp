@@ -20,6 +20,7 @@ export interface IndexDocumentsResult {
 export interface SearchChunksResult {
   query: string;
   retrieval_mode: "semantic" | "lexical";
+  guidance?: string;
   hits: Array<{
     score: number;
     source: string;
@@ -34,6 +35,7 @@ export interface AskWithCitationsResult {
   citations: Citation[];
   answer_generation_mode: "client_llm";
   retrieval_mode: "semantic" | "lexical";
+  guidance?: string;
   latency_ms: number;
 }
 
@@ -108,10 +110,13 @@ export class DocumentQaService {
       topK: input.topK ?? 5,
       sourcePaths: input.sourceFilter,
     });
+    const retrievalMode = queryEmbedding ? "semantic" : "lexical";
+    const guidance = buildGuidance(retrievalMode, input.query, hits.length);
 
     return {
       query: input.query,
-      retrieval_mode: queryEmbedding ? "semantic" : "lexical",
+      retrieval_mode: retrievalMode,
+      guidance,
       hits: hits.map((hit) => ({
         score: Number(hit.score.toFixed(4)),
         source: hit.source.path,
@@ -140,11 +145,15 @@ export class DocumentQaService {
     });
 
     const result = buildAnswerWithCitations(input.question, hits);
+    const retrievalMode = queryEmbedding ? "semantic" : "lexical";
+    const guidance = buildGuidance(retrievalMode, input.question, hits.length);
+
     return {
       answer: result.answer,
       citations: result.citations,
       answer_generation_mode: "client_llm",
-      retrieval_mode: queryEmbedding ? "semantic" : "lexical",
+      retrieval_mode: retrievalMode,
+      guidance,
       latency_ms: Date.now() - startedAt,
     };
   }
@@ -156,4 +165,25 @@ function assertSupportedExtension(filePath: string) {
   if (!supported.has(ext)) {
     throw new Error(`Unsupported extension: ${ext}. Allowed: .md, .txt`);
   }
+}
+
+function buildGuidance(
+  retrievalMode: "semantic" | "lexical",
+  query: string,
+  hitCount: number,
+): string | undefined {
+  if (hitCount > 0) {
+    return undefined;
+  }
+
+  if (retrievalMode === "semantic") {
+    return "No relevant chunks found. Try a more specific question or index additional documents.";
+  }
+
+  const hasHangul = /[가-힣]/.test(query);
+  if (hasHangul) {
+    return "No lexical matches. In lexical mode, ask in the same language as indexed documents (e.g., English docs -> English query), or enable semantic mode.";
+  }
+
+  return "No lexical matches. Try using exact keywords from the document or enable semantic mode.";
 }

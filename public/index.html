@@ -28,14 +28,17 @@
         display: grid;
         place-items: center;
         padding: 24px;
+        overflow-x: hidden;
       }
 
       .panel {
-        width: min(980px, 100%);
+        width: min(980px, calc(100vw - 48px));
+        max-width: 980px;
         background: var(--card);
         border: 2px solid #000;
         box-shadow: 10px 10px 0 #000;
         padding: 20px;
+        overflow: hidden;
       }
 
       h1 {
@@ -106,6 +109,9 @@
         color: #f8f8f8;
         padding: 10px;
         font-size: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
 
       @media (max-width: 900px) {
@@ -118,7 +124,10 @@
   <body>
     <main class="panel">
       <h1>Document QA Server Demo</h1>
-      <p class="lead">Independent REST flow for indexing, search, and ask.</p>
+      <p class="lead">
+        Independent REST flow for indexing, search, and ask.
+        In lexical mode, query language should match document language.
+      </p>
 
       <section class="grid">
         <div class="block">
