@@ -58,9 +58,11 @@ describe("HTTP API integration", () => {
     const askData = (await askResponse.json()) as {
       citations: unknown[];
       retrieval_mode: string;
+      answer_generation_mode: string;
     };
     expect(askData.citations.length).toBeGreaterThan(0);
     expect(askData.retrieval_mode).toBe("lexical");
+    expect(askData.answer_generation_mode).toBe("client_llm");
   });
 
   it("indexes raw uploaded text via /api/index-text", async () => {

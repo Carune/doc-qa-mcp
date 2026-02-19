@@ -9,7 +9,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import "dotenv/config";
 import { z } from "zod";
 import { loadConfig } from "./config/env.js";
-import { OpenAiClient } from "./infra/ai/openAiClient.js";
+import { DefaultAiClient } from "./infra/ai/defaultAiClient.js";
 import { createKnowledgeBase } from "./infra/store/createKnowledgeBase.js";
 import { DocumentQaService } from "./services/documentQaService.js";
 import { registerIndexDocumentsTool } from "./tools/indexDocuments.js";
@@ -53,14 +53,11 @@ const askApiSchema = z.object({
 
 async function main() {
   const config = loadConfig();
-  const aiClient = new OpenAiClient({
-    apiKey: config.openaiApiKey,
-    embeddingModel: config.embeddingModel,
-  });
+  const aiClient = new DefaultAiClient(config);
 
-  if (config.enablePgvector && !aiClient.isConfigured()) {
+  if (config.enablePgvector && !aiClient.isEmbeddingConfigured()) {
     throw new Error(
-      "pgvector mode requires OPENAI_API_KEY to create query/document embeddings.",
+      "pgvector mode requires embeddings. Set EMBEDDING_PROVIDER=openai or EMBEDDING_PROVIDER=ollama.",
     );
   }
 

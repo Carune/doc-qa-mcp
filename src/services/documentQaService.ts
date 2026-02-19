@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { KnowledgeBase } from "../domain/knowledgeBase.js";
-import { OpenAiClient } from "../infra/ai/openAiClient.js";
+import { AiClient } from "../infra/ai/types.js";
 import { buildAnswerWithCitations, Citation } from "../pipelines/answering.js";
 import { splitIntoChunks } from "../pipelines/chunking.js";
 
@@ -38,7 +38,7 @@ export interface SearchChunksResult {
 export interface AskWithCitationsResult {
   answer: string;
   citations: Citation[];
-  answer_generation_mode: "client_llm";
+  answer_generation_mode: "client_llm" | "ollama";
   retrieval_mode: "semantic" | "lexical";
   guidance?: string;
   latency_ms: number;
@@ -47,7 +47,7 @@ export interface AskWithCitationsResult {
 export class DocumentQaService {
   constructor(
     private readonly knowledgeBase: KnowledgeBase,
-    private readonly aiClient: OpenAiClient,
+    private readonly aiClient: AiClient,
   ) {}
 
   async indexDocuments(paths: string[]): Promise<IndexDocumentsResult> {
@@ -79,7 +79,7 @@ export class DocumentQaService {
     return {
       indexed_count: indexedCount,
       chunk_count: chunkCount,
-      embedding_enabled: this.aiClient.isConfigured(),
+      embedding_enabled: this.aiClient.isEmbeddingConfigured(),
       failed,
     };
   }
@@ -113,7 +113,7 @@ export class DocumentQaService {
     return {
       indexed_count: indexedCount,
       chunk_count: chunkCount,
-      embedding_enabled: this.aiClient.isConfigured(),
+      embedding_enabled: this.aiClient.isEmbeddingConfigured(),
       failed,
     };
   }
@@ -127,7 +127,7 @@ export class DocumentQaService {
     topK?: number;
     sourceFilter?: string[];
   }): Promise<SearchChunksResult> {
-    const queryEmbedding = this.aiClient.isConfigured()
+    const queryEmbedding = this.aiClient.isEmbeddingConfigured()
       ? await this.aiClient.embedQuery(input.query)
       : null;
     const hits = await this.knowledgeBase.search({
@@ -159,7 +159,7 @@ export class DocumentQaService {
     sourceFilter?: string[];
   }): Promise<AskWithCitationsResult> {
     const startedAt = Date.now();
-    const queryEmbedding = this.aiClient.isConfigured()
+    const queryEmbedding = this.aiClient.isEmbeddingConfigured()
       ? await this.aiClient.embedQuery(input.question)
       : null;
 
@@ -174,10 +174,29 @@ export class DocumentQaService {
     const retrievalMode = queryEmbedding ? "semantic" : "lexical";
     const guidance = buildGuidance(retrievalMode, input.question, hits.length);
 
+    let answer = result.answer;
+    let answerGenerationMode: "client_llm" | "ollama" = "client_llm";
+
+    if (this.aiClient.getAnswerMode() === "ollama" && hits.length > 0) {
+      const generated = await this.aiClient.generateGroundedAnswer(
+        input.question,
+        hits.slice(0, 6).map((hit) => ({
+          source: hit.source.path,
+          chunkIndex: hit.chunk.index,
+          snippet: hit.chunk.text.slice(0, 600),
+        })),
+      );
+
+      if (generated) {
+        answer = generated;
+        answerGenerationMode = "ollama";
+      }
+    }
+
     return {
-      answer: result.answer,
+      answer,
       citations: result.citations,
-      answer_generation_mode: "client_llm",
+      answer_generation_mode: answerGenerationMode,
       retrieval_mode: retrievalMode,
       guidance,
       latency_ms: Date.now() - startedAt,
@@ -186,7 +205,7 @@ export class DocumentQaService {
 
   private async indexSingleDocument(input: { sourcePath: string; content: string }) {
     const chunks = splitIntoChunks(input.content);
-    const embeddings = this.aiClient.isConfigured()
+    const embeddings = this.aiClient.isEmbeddingConfigured()
       ? await this.aiClient.embedTexts(chunks)
       : [];
 
@@ -228,8 +247,8 @@ function buildGuidance(
     return "No relevant chunks found. Try a more specific question or index additional documents.";
   }
 
-  const hasHangul = /[가-힣]/.test(query);
-  if (hasHangul) {
+  const hasNonLatin = /[^\u0000-\u00ff]/.test(query);
+  if (hasNonLatin) {
     return "No lexical matches. In lexical mode, ask in the same language as indexed documents (e.g., English docs -> English query), or enable semantic mode.";
   }
 

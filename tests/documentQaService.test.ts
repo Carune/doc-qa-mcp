@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { OpenAiClient } from "../src/infra/ai/openAiClient.js";
+import { DefaultAiClient } from "../src/infra/ai/defaultAiClient.js";
 import { InMemoryKnowledgeBase } from "../src/infra/store/inMemoryKnowledgeBase.js";
 import { DocumentQaService } from "../src/services/documentQaService.js";
 
@@ -8,10 +8,7 @@ describe("DocumentQaService", () => {
   it("indexes documents and returns grounded citations", async () => {
     const service = new DocumentQaService(
       new InMemoryKnowledgeBase(),
-      new OpenAiClient({
-        apiKey: null,
-        embeddingModel: "text-embedding-3-small",
-      }),
+      createTestAiClient(),
     );
 
     const docs = [
@@ -35,10 +32,7 @@ describe("DocumentQaService", () => {
   it("returns language guidance when lexical query language mismatches", async () => {
     const service = new DocumentQaService(
       new InMemoryKnowledgeBase(),
-      new OpenAiClient({
-        apiKey: null,
-        embeddingModel: "text-embedding-3-small",
-      }),
+      createTestAiClient(),
     );
 
     await service.indexDocuments([path.resolve("docs/sample-api.md")]);
@@ -50,3 +44,21 @@ describe("DocumentQaService", () => {
     expect(result.guidance?.toLowerCase()).toContain("lexical mode");
   });
 });
+
+function createTestAiClient(): DefaultAiClient {
+  return new DefaultAiClient({
+    enablePgvector: false,
+    databaseUrl: null,
+    openaiApiKey: null,
+    embeddingModel: "text-embedding-3-small",
+    embeddingProvider: "none",
+    answerMode: "client_llm",
+    ollamaBaseUrl: "http://127.0.0.1:11434",
+    ollamaChatModel: "qwen2.5:7b-instruct",
+    ollamaEmbeddingModel: "nomic-embed-text",
+    transport: "http",
+    host: "127.0.0.1",
+    port: 3177,
+    vectorDimension: 1536,
+  });
+}

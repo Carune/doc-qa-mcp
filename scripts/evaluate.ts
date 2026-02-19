@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { DefaultAiClient } from "../src/infra/ai/defaultAiClient.js";
 import { InMemoryKnowledgeBase } from "../src/infra/store/inMemoryKnowledgeBase.js";
-import { OpenAiClient } from "../src/infra/ai/openAiClient.js";
 import { DocumentQaService } from "../src/services/documentQaService.js";
 
 interface EvalQuestion {
@@ -13,9 +13,20 @@ interface EvalQuestion {
 async function main() {
   const service = new DocumentQaService(
     new InMemoryKnowledgeBase(),
-    new OpenAiClient({
-      apiKey: null,
+    new DefaultAiClient({
+      enablePgvector: false,
+      databaseUrl: null,
+      openaiApiKey: null,
       embeddingModel: "text-embedding-3-small",
+      embeddingProvider: "none",
+      answerMode: "client_llm",
+      ollamaBaseUrl: "http://127.0.0.1:11434",
+      ollamaChatModel: "qwen2.5:7b-instruct",
+      ollamaEmbeddingModel: "nomic-embed-text",
+      transport: "http",
+      host: "127.0.0.1",
+      port: 3000,
+      vectorDimension: 1536,
     }),
   );
 
