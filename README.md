@@ -1,20 +1,20 @@
 # doc-qa-mcp
 
 문서 QA용 MCP 서버입니다.  
-현재는 MCP 도구뿐 아니라 REST API도 함께 제공해서, ChatGPT 없이도 독립 실행할 수 있습니다.
+이 프로젝트는 **MCP 도구 + REST API + 간단 웹 UI**를 함께 제공해서, ChatGPT 없이도 독립 실행이 가능합니다.
 
-## 핵심 기능
+## 현재 기능
 
-- 로컬 문서 인덱싱: `.md`, `.txt`
-- 검색: lexical(기본) / semantic(pgvector+임베딩)
-- 근거 기반 답변 초안 + citations
-- MCP 도구 + REST API 동시 제공
+- 로컬 문서 인덱싱 (`.md`, `.txt`)
+- 검색 (`lexical` 기본, `semantic` 선택)
+- 근거 문단(citations) 포함 답변 초안 생성
+- MCP 엔드포인트(`/mcp`) 제공
+- REST API(`/api/*`) 제공
+- 데모 UI(`/`) 제공
 
-## 실행 모드
+## 빠른 시작 (기본 모드)
 
-### 1) 기본 모드 (무과금, 권장 시작점)
-
-`.env`:
+`.env` 예시:
 
 ```env
 MCP_TRANSPORT=http
@@ -38,9 +38,71 @@ npm run dev
 curl http://localhost:3000/healthz
 ```
 
-### 2) semantic 검색 모드 (선택)
+브라우저 데모:
 
-`pgvector` + 임베딩을 사용합니다.
+```text
+http://localhost:3000/
+```
+
+## REST API
+
+- `POST /api/index`
+- `GET /api/sources`
+- `POST /api/search`
+- `POST /api/ask`
+
+예시:
+
+```json
+{
+  "paths": ["docs/sample-api.md", "docs/sample-oncall.md"]
+}
+```
+
+## MCP 도구
+
+- `health_check`
+- `index_documents`
+- `list_sources`
+- `search_chunks`
+- `ask_with_citations`
+
+## ChatGPT 연결
+
+1. 서버 실행 (`MCP_TRANSPORT=http`)
+2. Cloudflare Tunnel 또는 ngrok로 외부 URL 확보
+3. ChatGPT 커넥터에 `https://<public-url>/mcp` 등록
+
+주의:
+
+- `localhost`는 ChatGPT에서 직접 접근할 수 없습니다.
+
+## 테스트
+
+```bash
+npm run test
+```
+
+포함:
+
+- 서비스 레이어 테스트 (`tests/documentQaService.test.ts`)
+- HTTP API 통합 테스트 (`tests/httpApi.integration.test.ts`)
+
+## 평가 스크립트
+
+```bash
+npm run eval
+```
+
+질문셋(`eval/questions.json`) 기준으로 다음 지표를 출력합니다.
+
+- `top_citation_hit_rate`
+- `keyword_hit_rate`
+- `avg_latency_ms`
+
+## Semantic 검색(선택)
+
+pgvector + OpenAI 임베딩을 사용할 때:
 
 ```env
 ENABLE_PGVECTOR=true
@@ -55,61 +117,6 @@ docker compose up -d
 npm run dev
 ```
 
-## MCP 도구
+## 로드맵
 
-- `health_check`
-- `index_documents`
-- `list_sources`
-- `search_chunks`
-- `ask_with_citations`
-
-## REST API (독립 실행 데모용)
-
-### 인덱싱
-
-`POST /api/index`
-
-```json
-{
-  "paths": ["docs/sample-api.md", "docs/sample-oncall.md"]
-}
-```
-
-### 소스 조회
-
-`GET /api/sources`
-
-### 검색
-
-`POST /api/search`
-
-```json
-{
-  "query": "장애 발생 시 무엇을 먼저 확인해?"
-}
-```
-
-### 질문
-
-`POST /api/ask`
-
-```json
-{
-  "question": "장애 대응 첫 단계가 뭐야?"
-}
-```
-
-## ChatGPT 연결
-
-1. 서버 실행 (`MCP_TRANSPORT=http`)
-2. Cloudflare Tunnel 또는 ngrok로 외부 URL 확보
-3. ChatGPT 커넥터에 `https://<public-url>/mcp` 등록
-
-주의:
-
-- `localhost`는 ChatGPT에서 직접 접근할 수 없습니다.
-- 터널 프로세스가 살아 있어야 연결이 유지됩니다.
-
-## 포트폴리오 로드맵
-
-다음 단계는 `docs/portfolio-roadmap.md`를 참고하세요.
+다음 단계는 `docs/portfolio-roadmap.md` 참고.

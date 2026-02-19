@@ -1,0 +1,34 @@
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { OpenAiClient } from "../src/infra/ai/openAiClient.js";
+import { InMemoryKnowledgeBase } from "../src/infra/store/inMemoryKnowledgeBase.js";
+import { DocumentQaService } from "../src/services/documentQaService.js";
+
+describe("DocumentQaService", () => {
+  it("indexes documents and returns grounded citations", async () => {
+    const service = new DocumentQaService(
+      new InMemoryKnowledgeBase(),
+      new OpenAiClient({
+        apiKey: null,
+        embeddingModel: "text-embedding-3-small",
+      }),
+    );
+
+    const docs = [
+      path.resolve("docs/sample-api.md"),
+      path.resolve("docs/sample-oncall.md"),
+    ];
+
+    const indexResult = await service.indexDocuments(docs);
+    expect(indexResult.indexed_count).toBe(2);
+    expect(indexResult.failed).toHaveLength(0);
+
+    const askResult = await service.askWithCitations({
+      question: "What should we check first during an incident?",
+    });
+
+    expect(askResult.citations.length).toBeGreaterThan(0);
+    expect(askResult.answer.toLowerCase()).toContain("incident");
+    expect(askResult.retrieval_mode).toBe("lexical");
+  });
+});

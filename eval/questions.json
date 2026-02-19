@@ -1,0 +1,27 @@
+[
+  {
+    "question": "What should we check first during an incident?",
+    "expected_source_contains": "sample-oncall.md",
+    "expected_keywords": ["impact", "scope"]
+  },
+  {
+    "question": "What should we monitor after deployment?",
+    "expected_source_contains": "sample-api.md",
+    "expected_keywords": ["error", "deployment"]
+  },
+  {
+    "question": "How do we handle traffic spikes?",
+    "expected_source_contains": "sample-api.md",
+    "expected_keywords": ["cache", "queue"]
+  },
+  {
+    "question": "What should on-call engineers summarize from logs?",
+    "expected_source_contains": "sample-oncall.md",
+    "expected_keywords": ["error", "patterns"]
+  },
+  {
+    "question": "What are the options after narrowing root causes?",
+    "expected_source_contains": "sample-oncall.md",
+    "expected_keywords": ["rollback", "feature-flag"]
+  }
+]

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Doc QA Demo</title>
+    <style>
+      :root {
+        --bg-a: #0b132b;
+        --bg-b: #1b2a49;
+        --card: #f7f4ea;
+        --ink: #101820;
+        --accent: #f95738;
+        --accent-2: #0f7173;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", "Noto Sans", sans-serif;
+        background: radial-gradient(circle at 20% 20%, #234, var(--bg-a) 45%),
+          linear-gradient(120deg, var(--bg-b), #14213d);
+        color: var(--ink);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .panel {
+        width: min(980px, 100%);
+        background: var(--card);
+        border: 2px solid #000;
+        box-shadow: 10px 10px 0 #000;
+        padding: 20px;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+        letter-spacing: 0.3px;
+      }
+
+      .lead {
+        margin: 0 0 18px;
+        color: #333;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .block {
+        border: 1px solid #222;
+        padding: 12px;
+        background: #fff;
+      }
+
+      .block h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+
+      textarea,
+      input {
+        width: 100%;
+        border: 1px solid #222;
+        padding: 8px;
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 90px;
+      }
+
+      .actions {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        border: 1px solid #111;
+        padding: 8px 12px;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      button.secondary {
+        background: var(--accent-2);
+      }
+
+      pre {
+        margin: 0;
+        max-height: 320px;
+        overflow: auto;
+        background: #111;
+        color: #f8f8f8;
+        padding: 10px;
+        font-size: 12px;
+      }
+
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <h1>Document QA Server Demo</h1>
+      <p class="lead">Independent REST flow for indexing, search, and ask.</p>
+
+      <section class="grid">
+        <div class="block">
+          <h2>1) Index Documents</h2>
+          <textarea id="paths">docs/sample-api.md
+docs/sample-oncall.md</textarea>
+          <div class="actions">
+            <button id="indexBtn">Index</button>
+            <button id="sourcesBtn" class="secondary">List Sources</button>
+          </div>
+        </div>
+
+        <div class="block">
+          <h2>2) Ask Question</h2>
+          <input id="question" value="What should we check first during an incident?" />
+          <div class="actions">
+            <button id="askBtn">Ask</button>
+            <button id="searchBtn" class="secondary">Search Only</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="block" style="margin-top: 14px">
+        <h2>Response</h2>
+        <pre id="output">Ready.</pre>
+      </section>
+    </main>
+
+    <script>
+      const output = document.getElementById("output");
+
+      async function callApi(path, method, body) {
+        const response = await fetch(path, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+
+        const text = await response.text();
+        let data = text;
+        try {
+          data = JSON.parse(text);
+        } catch {}
+
+        if (!response.ok) {
+          throw new Error(typeof data === "string" ? data : JSON.stringify(data));
+        }
+
+        return data;
+      }
+
+      function setOutput(data) {
+        output.textContent =
+          typeof data === "string" ? data : JSON.stringify(data, null, 2);
+      }
+
+      document.getElementById("indexBtn").addEventListener("click", async () => {
+        try {
+          const lines = document
+            .getElementById("paths")
+            .value.split("\n")
+            .map((v) => v.trim())
+            .filter(Boolean);
+          const data = await callApi("/api/index", "POST", { paths: lines });
+          setOutput(data);
+        } catch (error) {
+          setOutput(String(error));
+        }
+      });
+
+      document.getElementById("sourcesBtn").addEventListener("click", async () => {
+        try {
+          const response = await fetch("/api/sources");
+          const data = await response.json();
+          setOutput(data);
+        } catch (error) {
+          setOutput(String(error));
+        }
+      });
+
+      document.getElementById("askBtn").addEventListener("click", async () => {
+        try {
+          const question = document.getElementById("question").value;
+          const data = await callApi("/api/ask", "POST", { question });
+          setOutput(data);
+        } catch (error) {
+          setOutput(String(error));
+        }
+      });
+
+      document.getElementById("searchBtn").addEventListener("click", async () => {
+        try {
+          const query = document.getElementById("question").value;
+          const data = await callApi("/api/search", "POST", { query });
+          setOutput(data);
+        } catch (error) {
+          setOutput(String(error));
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -24,6 +26,7 @@ type SessionMap = Record<string, SessionEntry>;
 
 const MCP_PATH = "/mcp";
 const API_PREFIX = "/api";
+const UI_PATH = "/";
 const indexApiSchema = z.object({
   paths: z.array(z.string()).min(1),
 });
@@ -135,6 +138,11 @@ async function runHttpServer(
       if (url.pathname === "/healthz") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
+      if (url.pathname === UI_PATH && req.method === "GET") {
+        await serveFile(res, path.resolve(process.cwd(), "public/index.html"), "text/html; charset=utf-8");
         return;
       }
 
@@ -379,6 +387,21 @@ function writeJsonRpcError(
 function writeJson(res: ServerResponse, statusCode: number, payload: unknown) {
   res.writeHead(statusCode, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
+}
+
+async function serveFile(
+  res: ServerResponse,
+  filePath: string,
+  contentType: string,
+) {
+  try {
+    const body = await fs.readFile(filePath, "utf-8");
+    res.writeHead(200, { "Content-Type": contentType });
+    res.end(body);
+  } catch {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not found");
+  }
 }
 
 main().catch((error) => {
