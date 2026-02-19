@@ -5,6 +5,7 @@ import { InMemoryKnowledgeBase } from "./infra/store/inMemoryKnowledgeBase.js";
 import { registerIndexDocumentsTool } from "./tools/indexDocuments.js";
 import { registerListSourcesTool } from "./tools/listSources.js";
 import { registerSearchChunksTool } from "./tools/searchChunks.js";
+import { registerAskWithCitationsTool } from "./tools/askWithCitations.js";
 
 const server = new McpServer({
   name: "doc-qa-mcp",
@@ -37,6 +38,7 @@ server.registerTool(
 registerIndexDocumentsTool(server, knowledgeBase);
 registerListSourcesTool(server, knowledgeBase);
 registerSearchChunksTool(server, knowledgeBase);
+registerAskWithCitationsTool(server, knowledgeBase);
 
 async function main() {
   const transport = new StdioServerTransport();
