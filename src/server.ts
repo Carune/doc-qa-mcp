@@ -9,6 +9,7 @@ import { z } from "zod";
 import { loadConfig } from "./config/env.js";
 import { OpenAiClient } from "./infra/ai/openAiClient.js";
 import { createKnowledgeBase } from "./infra/store/createKnowledgeBase.js";
+import { DocumentQaService } from "./services/documentQaService.js";
 import { registerIndexDocumentsTool } from "./tools/indexDocuments.js";
 import { registerListSourcesTool } from "./tools/listSources.js";
 import { registerSearchChunksTool } from "./tools/searchChunks.js";
@@ -22,6 +23,20 @@ interface SessionEntry {
 type SessionMap = Record<string, SessionEntry>;
 
 const MCP_PATH = "/mcp";
+const API_PREFIX = "/api";
+const indexApiSchema = z.object({
+  paths: z.array(z.string()).min(1),
+});
+const searchApiSchema = z.object({
+  query: z.string().min(2),
+  top_k: z.number().int().min(1).max(20).optional(),
+  source_filter: z.array(z.string()).optional(),
+});
+const askApiSchema = z.object({
+  question: z.string().min(2),
+  top_k: z.number().int().min(1).max(10).optional(),
+  source_filter: z.array(z.string()).optional(),
+});
 
 async function main() {
   const config = loadConfig();
@@ -37,16 +52,18 @@ async function main() {
   }
 
   const { knowledgeBase, close } = await createKnowledgeBase(config);
+  const qaService = new DocumentQaService(knowledgeBase, aiClient);
   const shutdownTasks: Array<() => Promise<void>> = [close];
 
   if (config.transport === "http") {
     const stopHttpServer = await runHttpServer(config.host, config.port, () =>
-      createAppServer(knowledgeBase, aiClient),
+      createAppServer(qaService),
+      qaService,
     );
     shutdownTasks.unshift(stopHttpServer);
     console.error(`MCP HTTP server listening on http://${config.host}:${config.port}${MCP_PATH}`);
   } else {
-    await runStdioServer(createAppServer(knowledgeBase, aiClient));
+    await runStdioServer(createAppServer(qaService));
   }
 
   const shutdown = async () => {
@@ -61,10 +78,7 @@ async function main() {
 }
 
 function createAppServer(
-  knowledgeBase: Awaited<
-    ReturnType<typeof createKnowledgeBase>
-  >["knowledgeBase"],
-  aiClient: OpenAiClient,
+  qaService: DocumentQaService,
 ): McpServer {
   const server = new McpServer({
     name: "doc-qa-mcp",
@@ -93,10 +107,10 @@ function createAppServer(
     },
   );
 
-  registerIndexDocumentsTool(server, knowledgeBase, aiClient);
-  registerListSourcesTool(server, knowledgeBase);
-  registerSearchChunksTool(server, knowledgeBase, aiClient);
-  registerAskWithCitationsTool(server, knowledgeBase, aiClient);
+  registerIndexDocumentsTool(server, qaService);
+  registerListSourcesTool(server, qaService);
+  registerSearchChunksTool(server, qaService);
+  registerAskWithCitationsTool(server, qaService);
 
   return server;
 }
@@ -110,6 +124,7 @@ async function runHttpServer(
   host: string,
   port: number,
   serverFactory: () => McpServer,
+  qaService: DocumentQaService,
 ): Promise<() => Promise<void>> {
   const sessions: SessionMap = {};
 
@@ -120,6 +135,11 @@ async function runHttpServer(
       if (url.pathname === "/healthz") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
+      if (url.pathname.startsWith(API_PREFIX)) {
+        await handleApiRequest(url.pathname, req, res, qaService);
         return;
       }
 
@@ -177,6 +197,69 @@ async function runHttpServer(
       });
     });
   };
+}
+
+async function handleApiRequest(
+  pathname: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  qaService: DocumentQaService,
+) {
+  if (pathname === "/api/sources" && req.method === "GET") {
+    const sources = await qaService.listSources();
+    writeJson(res, 200, { sources });
+    return;
+  }
+
+  if (req.method !== "POST") {
+    writeJson(res, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const body = await readJsonBody(req);
+
+  if (pathname === "/api/index") {
+    const parsed = indexApiSchema.safeParse(body);
+    if (!parsed.success) {
+      writeJson(res, 400, { error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+    const result = await qaService.indexDocuments(parsed.data.paths);
+    writeJson(res, 200, result);
+    return;
+  }
+
+  if (pathname === "/api/search") {
+    const parsed = searchApiSchema.safeParse(body);
+    if (!parsed.success) {
+      writeJson(res, 400, { error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+    const result = await qaService.searchChunks({
+      query: parsed.data.query,
+      topK: parsed.data.top_k,
+      sourceFilter: parsed.data.source_filter,
+    });
+    writeJson(res, 200, result);
+    return;
+  }
+
+  if (pathname === "/api/ask") {
+    const parsed = askApiSchema.safeParse(body);
+    if (!parsed.success) {
+      writeJson(res, 400, { error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+    const result = await qaService.askWithCitations({
+      question: parsed.data.question,
+      topK: parsed.data.top_k,
+      sourceFilter: parsed.data.source_filter,
+    });
+    writeJson(res, 200, result);
+    return;
+  }
+
+  writeJson(res, 404, { error: "API route not found" });
 }
 
 async function handleMcpPost(
@@ -291,6 +374,11 @@ function writeJsonRpcError(
       id: null,
     }),
   );
+}
+
+function writeJson(res: ServerResponse, statusCode: number, payload: unknown) {
+  res.writeHead(statusCode, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(payload));
 }
 
 main().catch((error) => {

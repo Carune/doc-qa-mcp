@@ -1,9 +1,9 @@
-# API 운영 가이드
+# API Operations Guide
 
-서비스 장애를 줄이기 위해 다음 원칙을 따른다.
+Follow these rules to reduce incidents:
 
-1. 배포 직후 10분간 에러율을 집중 모니터링한다.
-2. 데이터베이스 커넥션 풀 한도를 초과하지 않도록 요청량을 제한한다.
-3. 외부 API 호출은 반드시 타임아웃과 재시도를 설정한다.
+1. Watch error rate closely for 10 minutes right after deployment.
+2. Keep database connection usage below pool limits.
+3. Set timeout and retry policy for all external API calls.
 
-트래픽 급증 시에는 읽기 전용 캐시를 우선 활용하고, 쓰기 요청은 큐로 흡수한다.
+During traffic spikes, use read cache first and buffer write requests in a queue.

@@ -1,9 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { KnowledgeBase } from "../domain/knowledgeBase.js";
+import { DocumentQaService } from "../services/documentQaService.js";
 
 export function registerListSourcesTool(
   server: McpServer,
-  knowledgeBase: KnowledgeBase,
+  qaService: DocumentQaService,
 ) {
   server.registerTool(
     "list_sources",
@@ -13,7 +13,7 @@ export function registerListSourcesTool(
       inputSchema: {},
     },
     async () => {
-      const sources = await knowledgeBase.listSources();
+      const sources = await qaService.listSources();
 
       return {
         content: [
