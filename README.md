@@ -1,29 +1,29 @@
 # doc-qa-mcp
 
-A portfolio MCP server for document QA.
+문서 질의응답 포트폴리오용 MCP 서버입니다.
 
-It started as an in-memory keyword search MVP, and now supports:
+초기에는 메모리 기반 키워드 검색 MVP로 시작했고, 현재는 아래 기능까지 포함합니다.
 
-- semantic retrieval with `pgvector`
-- grounded QA with OpenAI (optional)
-- citation output for every answer
+- `pgvector` 기반 의미 검색
+- OpenAI 기반 근거 답변 생성(옵션)
+- 답변별 출처(citation) 반환
 
-## Architecture
+## 아키텍처
 
 1. `index_documents`
-   - reads `.md` / `.txt`
-   - splits content into chunks
-   - (optional) generates embeddings
-   - stores source + chunks
+   - `.md` / `.txt` 파일 읽기
+   - 문서를 청크 단위로 분할
+   - (옵션) 청크 임베딩 생성
+   - 소스/청크 저장
 2. `search_chunks`
-   - in-memory mode: lexical overlap search
-   - pgvector mode: vector similarity search
+   - 메모리 모드: 토큰 겹침 기반 검색
+   - pgvector 모드: 벡터 유사도 검색
 3. `ask_with_citations`
-   - retrieves top chunks
-   - returns answer + citations
-   - if OpenAI key exists, answer is model-generated from retrieved context
+   - 상위 청크 검색
+   - 답변 + 출처 반환
+   - OpenAI 키가 있으면 검색 컨텍스트 기반 모델 답변 생성
 
-## Run (in-memory mode)
+## 실행 (메모리 모드)
 
 ```bash
 npm install
@@ -31,35 +31,35 @@ npm run build
 npm run dev
 ```
 
-No extra infra is required in this mode.
+메모리 모드는 별도 인프라가 필요 없습니다.
 
-## Run (pgvector + semantic mode)
+## 실행 (pgvector + 의미 검색 모드)
 
-1. Start postgres with pgvector:
+1. pgvector postgres 실행
 
 ```bash
 docker compose up -d
 ```
 
-2. Create `.env` from `.env.example` and set your key:
+2. `.env.example` 복사 후 `.env` 생성
 
 ```bash
 cp .env.example .env
 ```
 
-Required values:
+필수 값:
 
 - `ENABLE_PGVECTOR=true`
 - `DATABASE_URL=postgres://mcp:mcp@localhost:5432/mcp_doc_qa`
 - `OPENAI_API_KEY=...`
 
-3. Run server:
+3. 서버 실행
 
 ```bash
 npm run dev
 ```
 
-## MCP tools
+## MCP 도구 목록
 
 - `health_check`
 - `index_documents`
@@ -67,7 +67,7 @@ npm run dev
 - `search_chunks`
 - `ask_with_citations`
 
-## Quick test flow (MCP Inspector)
+## 빠른 테스트 흐름 (MCP Inspector)
 
 1. `index_documents`
 
@@ -84,16 +84,16 @@ npm run dev
 3. `search_chunks`
 
 ```json
-{"query":"What should we check first during an incident?"}
+{"query":"장애 발생 시 가장 먼저 무엇을 확인해야 해?"}
 ```
 
 4. `ask_with_citations`
 
 ```json
-{"question":"What is the first incident response step?"}
+{"question":"장애 대응 첫 단계가 뭐야?"}
 ```
 
-## Notes
+## 참고
 
-- `migrations/001_init_pgvector.sql` is provided for reference.
-- The app also auto-initializes extension/tables/indexes in pgvector mode.
+- `migrations/001_init_pgvector.sql` 파일을 제공하지만,
+  pgvector 모드에서는 서버 시작 시 extension/table/index를 자동 초기화합니다.
