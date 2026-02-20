@@ -1,39 +1,56 @@
 ﻿# doc-qa-mcp
 
-臾몄꽌 QA??MCP ?쒕쾭 ?ы듃?대━???꾨줈?앺듃?낅땲??  
-濡쒖뺄 臾몄꽌(`.md`, `.txt`)瑜??몃뜳?깊븯怨? 寃??寃곌낵? 異쒖쿂(citation)瑜?湲곕컲?쇰줈 ?듬??????덉뒿?덈떎.
+로컬 문서 기반 질의응답을 위한 MCP/REST 서버입니다.  
+문서를 청킹해 인덱싱하고, 검색 결과를 근거(citation)로 포함한 답변을 제공합니다.
 
-## 1. ?꾩옱 援ы쁽 踰붿쐞
+## 1. 주요 기능
 
-- MCP ?꾧뎄 ?쒓났: `health_check`, `index_documents`, `list_sources`, `search_chunks`, `ask_with_citations`
-- REST API ?쒓났: `/api/index`, `/api/index-text`, `/api/sources`, `/api/search`, `/api/ask`
-- ???곕え UI ?쒓났: `GET /`
-- 寃??紐⑤뱶
-1. `lexical`(湲곕낯): ?ㅼ썙??湲곕컲 寃??2. `semantic`: ?꾨쿋??湲곕컲 寃??- ?듬? 紐⑤뱶
-1. `client_llm`(湲곕낯): ?쒕쾭??洹쇨굅/?붿빟留?諛섑솚, 理쒖쥌 ?먯뿰???앹꽦? ?대씪?댁뼵??LLM???대떦
-2. `ollama`: ?쒕쾭媛 濡쒖뺄 Ollama 紐⑤뜽濡?理쒖쥌 ?듬?源뚯? ?앹꽦
+- MCP 도구
+  - `health_check`
+  - `index_documents`
+  - `list_sources`
+  - `search_chunks`
+  - `ask_with_citations`
+- REST API
+  - `POST /api/index`
+  - `POST /api/index-text`
+  - `POST /api/index-upload`
+  - `POST /api/index/reset`
+  - `GET /api/index/storage`
+  - `GET /api/sources`
+  - `POST /api/search`
+  - `POST /api/ask`
+  - `POST /api/ask-stream`
+  - `POST /api/summarize`
+- 검색/답변 모드
+  - 검색: `lexical`, `hybrid`(벡터 사용 시)
+  - 답변: `client_llm`, `ollama`
 
-## 2. 鍮좊Ⅸ ?쒖옉
+## 2. 빠른 시작
 
 ```bash
 npm install
 npm run dev
 ```
 
-湲곕낯 ?묒냽:
+기본 주소
 
-- ?곕え UI: `http://localhost:3000/`
-- ?ъ뒪泥댄겕: `http://localhost:3000/healthz`
-- MCP ?붾뱶?ъ씤?? `http://localhost:3000/mcp`
+- UI: `http://localhost:3000/`
+- 헬스체크: `http://localhost:3000/healthz`
+- MCP 엔드포인트: `http://localhost:3000/mcp`
 
-## 3. ?ㅽ뻾 紐⑤뱶 ?ㅼ젙(.env)
+## 3. 환경 변수
 
-`.env.example`??蹂듭궗?댁꽌 `.env`瑜?留뚮뱺 ???ъ슜?섏꽭??
+`.env.example`를 복사해 `.env`를 만드세요.
 
 ```env
 MCP_TRANSPORT=http
 MCP_HOST=0.0.0.0
 MCP_PORT=3000
+
+PERSIST_INMEMORY_INDEX=true
+INMEMORY_INDEX_PATH=.data/inmemory-index.json
+MAX_INMEMORY_INDEX_BYTES=20971520
 
 ENABLE_PGVECTOR=false
 DATABASE_URL=postgres://mcp:mcp@localhost:5432/mcp_doc_qa
@@ -50,82 +67,81 @@ OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 VECTOR_DIMENSION=1536
 ```
 
-### 3-1. 異붿쿇 紐⑤뱶
+권장 모드
 
-- ?꾩쟾 臾대즺 濡쒖뺄 ?곕え(寃??+ ?쒕쾭 ?듬? ?앹꽦)
-1. `EMBEDDING_PROVIDER=ollama`
-2. `ANSWER_MODE=ollama`
+- 로컬 완전형 RAG
+  - `EMBEDDING_PROVIDER=ollama`
+  - `ANSWER_MODE=ollama`
+- 최소 구성(MVP)
+  - `EMBEDDING_PROVIDER=none`
+  - `ANSWER_MODE=client_llm`
 
-- ?⑥닚 MVP(寃?됰쭔)
-1. `EMBEDDING_PROVIDER=none`
-2. `ANSWER_MODE=client_llm`
+## 4. Ollama 기반 실행
 
-## 4. Ollama 湲곕컲 "吏꾩쭨 RAG" ?ㅽ뻾
+모델 준비
 
-### 4-1. Ollama 紐⑤뜽 以鍮?
 ```bash
 ollama pull qwen2.5:7b-instruct
 ollama pull nomic-embed-text
 ```
 
-### 4-2. .env ?ㅼ젙
-
-```env
-EMBEDDING_PROVIDER=ollama
-ANSWER_MODE=ollama
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_CHAT_MODEL=qwen2.5:7b-instruct
-OLLAMA_EMBEDDING_MODEL=nomic-embed-text
-```
-
-### 4-3. ?쒕쾭 ?ㅽ뻾
+서버 실행
 
 ```bash
 npm run dev
 ```
 
-## 5. ?ъ슜 ?쒖꽌(?섎룄???숈옉 ?먮쫫)
+## 5. 사용 순서
 
-1. 臾몄꽌 ?몃뜳??- ?뚯씪 寃쎈줈 ?몃뜳?? `/api/index`
-- ?뚯씪 ?낅줈???몃뜳?? `/api/index-text`
+1. 문서 인덱싱
+- 경로 인덱싱: `POST /api/index`
+- 텍스트 인덱싱: `POST /api/index-text`
+- 파일 업로드 인덱싱: `POST /api/index-upload`
 
-2. 寃???뺤씤
-- `/api/search` ?먮뒗 `search_chunks`濡?洹쇨굅 泥?겕 ?뺤씤
+2. 검색 확인
+- `POST /api/search`
 
-3. 吏덉쓽 ?묐떟
-- `/api/ask` ?먮뒗 `ask_with_citations`
-- 諛섑솚媛믪쓽 `answer_generation_mode` ?뺤씤
-1. `client_llm`: ?쒕쾭??洹쇨굅 湲곕컲 ?붿빟源뚯?
-2. `ollama`: ?쒕쾭媛 理쒖쥌 ?듬?源뚯? ?앹꽦
+3. 질의응답
+- 일반: `POST /api/ask`
+- 스트리밍: `POST /api/ask-stream`
+- 전체 요약: `POST /api/summarize`
 
-## 6. ?ㅺ뎅??愿??二쇱쓽?ы빆
+4. 운영 확인
+- 소스 목록: `GET /api/sources`
+- 저장소 정보: `GET /api/index/storage`
+- 인덱스 초기화: `POST /api/index/reset`
 
-- `lexical` 紐⑤뱶?먯꽌??臾몄꽌 ?몄뼱? 吏덈Ц ?몄뼱媛 媛숈븘??寃???뺥솗?꾧? ?믪뒿?덈떎.
-- ?ㅺ뎅???? ?ㅽ럹?몄뼱 臾몄꽌 + ?쒓뎅??吏덈Ц)瑜??먰븯硫?`EMBEDDING_PROVIDER=ollama` ?먮뒗 OpenAI ?꾨쿋??湲곕컲??`semantic` 紐⑤뱶瑜??ъ슜?섏꽭??
-
-## 7. ?뚯뒪???됯?
+## 6. 테스트/평가/벤치
 
 ```bash
 npm run test
 npm run eval
+BENCH_QUESTION="테이블 목록 알려줘" npm run bench
 ```
 
-- `test`: ?⑥쐞/?듯빀 ?뚯뒪??- `eval`: ?섑뵆 吏덈Ц??湲곗? 媛꾨떒 吏??異쒕젰(`top_citation_hit_rate`, `keyword_hit_rate`, `avg_latency_ms`)
+- `test`: 단위/통합 테스트
+- `eval`: 간단 품질 지표 출력
+- `bench`: API 지연/TTFT 벤치마크
 
-## 8. ChatGPT 而ㅻ꽖???곌껐
+## 7. 주의사항
 
-1. ?쒕쾭 ?ㅽ뻾(`MCP_TRANSPORT=http`)
-2. ?몃? 怨듦컻 URL ?뺣낫(Cloudflare Tunnel ?먮뒗 ngrok)
-3. ChatGPT ??而ㅻ꽖?곗뿉 `https://<public-url>/mcp` ?깅줉
+- `lexical` 모드에서는 문서 언어와 질문 언어가 다르면 성능이 떨어질 수 있습니다.
+- 구조 질의(테이블/메뉴/목록)는 결정적 추출 경로를 우선 사용합니다.
+- 운영 환경에서는 `/api/index` 경로 입력에 대한 접근제어/allowlist 적용을 권장합니다.
 
-二쇱쓽:
+## 8. ChatGPT 커넥터 연결
 
-- ChatGPT Pro 援щ룆怨?OpenAI API 怨쇨툑? 蹂꾧컻?낅땲??
-- `ANSWER_MODE=client_llm`?대㈃ ChatGPT媛 理쒖쥌 臾몄옣??留뚮뱾怨? `ANSWER_MODE=ollama`?대㈃ ?쒕쾭媛 理쒖쥌 臾몄옣??留뚮벊?덈떎.
+1. 서버 실행(`MCP_TRANSPORT=http`)
+2. 공개 URL 준비(ngrok/Cloudflare Tunnel)
+3. 커넥터에 `https://<public-url>/mcp` 등록
+
+참고
+
+- ChatGPT 구독과 OpenAI API 과금은 별개입니다.
+- `ANSWER_MODE=client_llm`이면 클라이언트 LLM이 최종 문장을 만들고, `ANSWER_MODE=ollama`이면 서버가 최종 문장을 생성합니다.
 
 ## 9. 포트폴리오 자료
 
 - 포트폴리오 요약(아키텍처/지표): `docs/portfolio/overview.md`
 - 3분 데모 스크립트: `docs/portfolio/demo-script.md`
 - 보안 및 운영 노트: `docs/portfolio/security-ops.md`
-
