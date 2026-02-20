@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import {
   KnowledgeBase,
+  ListChunksInput,
   SearchInput,
   UpsertSourceInput,
 } from "../../domain/knowledgeBase.js";
-import { SearchResult, SourceRecord } from "../../domain/types.js";
+import { SearchResult, SourceChunkRecord, SourceRecord } from "../../domain/types.js";
 
 interface PgChunkRow {
   chunk_id: string;
@@ -16,6 +17,16 @@ interface PgChunkRow {
   indexed_at: Date;
   chunk_count: number;
   score: number;
+}
+
+interface PgSourceChunkRow {
+  chunk_id: string;
+  source_id: string;
+  chunk_index: number;
+  content: string;
+  path: string;
+  indexed_at: Date;
+  chunk_count: number;
 }
 
 export class PgVectorKnowledgeBase implements KnowledgeBase {
@@ -194,6 +205,73 @@ export class PgVectorKnowledgeBase implements KnowledgeBase {
       },
       score: Number(row.score),
     }));
+  }
+
+  async listChunks(input?: ListChunksInput): Promise<SourceChunkRecord[]> {
+    await this.initialize();
+
+    const limit = input?.limit && input.limit > 0 ? Math.floor(input.limit) : 100000;
+    const result = await this.pool.query<PgSourceChunkRow>(
+      `
+        SELECT
+          c.id AS chunk_id,
+          c.source_id,
+          c.chunk_index,
+          c.content,
+          s.path,
+          s.indexed_at,
+          s.chunk_count
+        FROM chunks c
+        JOIN sources s ON s.id = c.source_id
+        WHERE ($1::text[] IS NULL OR s.path = ANY($1::text[]))
+        ORDER BY s.path ASC, c.chunk_index ASC
+        LIMIT $2
+      `,
+      [input?.sourcePaths?.length ? input.sourcePaths : null, limit],
+    );
+
+    return result.rows.map((row) => ({
+      source: {
+        id: row.source_id,
+        path: row.path,
+        indexedAt: row.indexed_at.toISOString(),
+        chunkCount: row.chunk_count,
+      },
+      chunk: {
+        id: row.chunk_id,
+        sourceId: row.source_id,
+        index: row.chunk_index,
+        text: row.content,
+      },
+    }));
+  }
+
+  async clear(): Promise<{ cleared_sources: number; cleared_chunks: number }> {
+    await this.initialize();
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const sourceCount = await client.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM sources",
+      );
+      const chunkCount = await client.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM chunks",
+      );
+
+      await client.query("TRUNCATE TABLE chunks, sources RESTART IDENTITY");
+      await client.query("COMMIT");
+
+      return {
+        cleared_sources: Number(sourceCount.rows[0]?.count ?? 0),
+        cleared_chunks: Number(chunkCount.rows[0]?.count ?? 0),
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 

@@ -63,6 +63,10 @@ export class DefaultAiClient implements AiClient {
     return this.answerMode;
   }
 
+  supportsStreamingAnswer(): boolean {
+    return this.answerMode === "ollama";
+  }
+
   async generateGroundedAnswer(
     question: string,
     contexts: RetrievedContext[],
@@ -71,5 +75,16 @@ export class DefaultAiClient implements AiClient {
       return null;
     }
     return this.ollama.generateGroundedAnswer(question, contexts);
+  }
+
+  async streamGroundedAnswer(
+    question: string,
+    contexts: RetrievedContext[],
+    onToken: (token: string) => void,
+  ): Promise<string | null> {
+    if (this.answerMode !== "ollama") {
+      return null;
+    }
+    return this.ollama.streamGroundedAnswer(question, contexts, onToken);
   }
 }

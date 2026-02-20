@@ -1,36 +1,34 @@
-# doc-qa-mcp
+﻿# doc-qa-mcp
 
-문서 QA용 MCP 서버 포트폴리오 프로젝트입니다.  
-로컬 문서(`.md`, `.txt`)를 인덱싱하고, 검색 결과와 출처(citation)를 기반으로 답변할 수 있습니다.
+臾몄꽌 QA??MCP ?쒕쾭 ?ы듃?대━???꾨줈?앺듃?낅땲??  
+濡쒖뺄 臾몄꽌(`.md`, `.txt`)瑜??몃뜳?깊븯怨? 寃??寃곌낵? 異쒖쿂(citation)瑜?湲곕컲?쇰줈 ?듬??????덉뒿?덈떎.
 
-## 1. 현재 구현 범위
+## 1. ?꾩옱 援ы쁽 踰붿쐞
 
-- MCP 도구 제공: `health_check`, `index_documents`, `list_sources`, `search_chunks`, `ask_with_citations`
-- REST API 제공: `/api/index`, `/api/index-text`, `/api/sources`, `/api/search`, `/api/ask`
-- 웹 데모 UI 제공: `GET /`
-- 검색 모드
-1. `lexical`(기본): 키워드 기반 검색
-2. `semantic`: 임베딩 기반 검색
-- 답변 모드
-1. `client_llm`(기본): 서버는 근거/요약만 반환, 최종 자연어 생성은 클라이언트 LLM이 담당
-2. `ollama`: 서버가 로컬 Ollama 모델로 최종 답변까지 생성
+- MCP ?꾧뎄 ?쒓났: `health_check`, `index_documents`, `list_sources`, `search_chunks`, `ask_with_citations`
+- REST API ?쒓났: `/api/index`, `/api/index-text`, `/api/sources`, `/api/search`, `/api/ask`
+- ???곕え UI ?쒓났: `GET /`
+- 寃??紐⑤뱶
+1. `lexical`(湲곕낯): ?ㅼ썙??湲곕컲 寃??2. `semantic`: ?꾨쿋??湲곕컲 寃??- ?듬? 紐⑤뱶
+1. `client_llm`(湲곕낯): ?쒕쾭??洹쇨굅/?붿빟留?諛섑솚, 理쒖쥌 ?먯뿰???앹꽦? ?대씪?댁뼵??LLM???대떦
+2. `ollama`: ?쒕쾭媛 濡쒖뺄 Ollama 紐⑤뜽濡?理쒖쥌 ?듬?源뚯? ?앹꽦
 
-## 2. 빠른 시작
+## 2. 鍮좊Ⅸ ?쒖옉
 
 ```bash
 npm install
 npm run dev
 ```
 
-기본 접속:
+湲곕낯 ?묒냽:
 
-- 데모 UI: `http://localhost:3000/`
-- 헬스체크: `http://localhost:3000/healthz`
-- MCP 엔드포인트: `http://localhost:3000/mcp`
+- ?곕え UI: `http://localhost:3000/`
+- ?ъ뒪泥댄겕: `http://localhost:3000/healthz`
+- MCP ?붾뱶?ъ씤?? `http://localhost:3000/mcp`
 
-## 3. 실행 모드 설정(.env)
+## 3. ?ㅽ뻾 紐⑤뱶 ?ㅼ젙(.env)
 
-`.env.example`을 복사해서 `.env`를 만든 뒤 사용하세요.
+`.env.example`??蹂듭궗?댁꽌 `.env`瑜?留뚮뱺 ???ъ슜?섏꽭??
 
 ```env
 MCP_TRANSPORT=http
@@ -52,26 +50,25 @@ OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 VECTOR_DIMENSION=1536
 ```
 
-### 3-1. 추천 모드
+### 3-1. 異붿쿇 紐⑤뱶
 
-- 완전 무료 로컬 데모(검색 + 서버 답변 생성)
+- ?꾩쟾 臾대즺 濡쒖뺄 ?곕え(寃??+ ?쒕쾭 ?듬? ?앹꽦)
 1. `EMBEDDING_PROVIDER=ollama`
 2. `ANSWER_MODE=ollama`
 
-- 단순 MVP(검색만)
+- ?⑥닚 MVP(寃?됰쭔)
 1. `EMBEDDING_PROVIDER=none`
 2. `ANSWER_MODE=client_llm`
 
-## 4. Ollama 기반 "진짜 RAG" 실행
+## 4. Ollama 湲곕컲 "吏꾩쭨 RAG" ?ㅽ뻾
 
-### 4-1. Ollama 모델 준비
-
+### 4-1. Ollama 紐⑤뜽 以鍮?
 ```bash
 ollama pull qwen2.5:7b-instruct
 ollama pull nomic-embed-text
 ```
 
-### 4-2. .env 설정
+### 4-2. .env ?ㅼ젙
 
 ```env
 EMBEDDING_PROVIDER=ollama
@@ -81,49 +78,54 @@ OLLAMA_CHAT_MODEL=qwen2.5:7b-instruct
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 ```
 
-### 4-3. 서버 실행
+### 4-3. ?쒕쾭 ?ㅽ뻾
 
 ```bash
 npm run dev
 ```
 
-## 5. 사용 순서(의도한 동작 흐름)
+## 5. ?ъ슜 ?쒖꽌(?섎룄???숈옉 ?먮쫫)
 
-1. 문서 인덱싱
-- 파일 경로 인덱싱: `/api/index`
-- 파일 업로드 인덱싱: `/api/index-text`
+1. 臾몄꽌 ?몃뜳??- ?뚯씪 寃쎈줈 ?몃뜳?? `/api/index`
+- ?뚯씪 ?낅줈???몃뜳?? `/api/index-text`
 
-2. 검색 확인
-- `/api/search` 또는 `search_chunks`로 근거 청크 확인
+2. 寃???뺤씤
+- `/api/search` ?먮뒗 `search_chunks`濡?洹쇨굅 泥?겕 ?뺤씤
 
-3. 질의 응답
-- `/api/ask` 또는 `ask_with_citations`
-- 반환값의 `answer_generation_mode` 확인
-1. `client_llm`: 서버는 근거 기반 요약까지
-2. `ollama`: 서버가 최종 답변까지 생성
+3. 吏덉쓽 ?묐떟
+- `/api/ask` ?먮뒗 `ask_with_citations`
+- 諛섑솚媛믪쓽 `answer_generation_mode` ?뺤씤
+1. `client_llm`: ?쒕쾭??洹쇨굅 湲곕컲 ?붿빟源뚯?
+2. `ollama`: ?쒕쾭媛 理쒖쥌 ?듬?源뚯? ?앹꽦
 
-## 6. 다국어 관련 주의사항
+## 6. ?ㅺ뎅??愿??二쇱쓽?ы빆
 
-- `lexical` 모드에서는 문서 언어와 질문 언어가 같아야 검색 정확도가 높습니다.
-- 다국어(예: 스페인어 문서 + 한국어 질문)를 원하면 `EMBEDDING_PROVIDER=ollama` 또는 OpenAI 임베딩 기반의 `semantic` 모드를 사용하세요.
+- `lexical` 紐⑤뱶?먯꽌??臾몄꽌 ?몄뼱? 吏덈Ц ?몄뼱媛 媛숈븘??寃???뺥솗?꾧? ?믪뒿?덈떎.
+- ?ㅺ뎅???? ?ㅽ럹?몄뼱 臾몄꽌 + ?쒓뎅??吏덈Ц)瑜??먰븯硫?`EMBEDDING_PROVIDER=ollama` ?먮뒗 OpenAI ?꾨쿋??湲곕컲??`semantic` 紐⑤뱶瑜??ъ슜?섏꽭??
 
-## 7. 테스트/평가
+## 7. ?뚯뒪???됯?
 
 ```bash
 npm run test
 npm run eval
 ```
 
-- `test`: 단위/통합 테스트
-- `eval`: 샘플 질문셋 기준 간단 지표 출력(`top_citation_hit_rate`, `keyword_hit_rate`, `avg_latency_ms`)
+- `test`: ?⑥쐞/?듯빀 ?뚯뒪??- `eval`: ?섑뵆 吏덈Ц??湲곗? 媛꾨떒 吏??異쒕젰(`top_citation_hit_rate`, `keyword_hit_rate`, `avg_latency_ms`)
 
-## 8. ChatGPT 커넥터 연결
+## 8. ChatGPT 而ㅻ꽖???곌껐
 
-1. 서버 실행(`MCP_TRANSPORT=http`)
-2. 외부 공개 URL 확보(Cloudflare Tunnel 또는 ngrok)
-3. ChatGPT 앱 커넥터에 `https://<public-url>/mcp` 등록
+1. ?쒕쾭 ?ㅽ뻾(`MCP_TRANSPORT=http`)
+2. ?몃? 怨듦컻 URL ?뺣낫(Cloudflare Tunnel ?먮뒗 ngrok)
+3. ChatGPT ??而ㅻ꽖?곗뿉 `https://<public-url>/mcp` ?깅줉
 
-주의:
+二쇱쓽:
 
-- ChatGPT Pro 구독과 OpenAI API 과금은 별개입니다.
-- `ANSWER_MODE=client_llm`이면 ChatGPT가 최종 문장을 만들고, `ANSWER_MODE=ollama`이면 서버가 최종 문장을 만듭니다.
+- ChatGPT Pro 援щ룆怨?OpenAI API 怨쇨툑? 蹂꾧컻?낅땲??
+- `ANSWER_MODE=client_llm`?대㈃ ChatGPT媛 理쒖쥌 臾몄옣??留뚮뱾怨? `ANSWER_MODE=ollama`?대㈃ ?쒕쾭媛 理쒖쥌 臾몄옣??留뚮벊?덈떎.
+
+## 9. 포트폴리오 자료
+
+- 포트폴리오 요약(아키텍처/지표): `docs/portfolio/overview.md`
+- 3분 데모 스크립트: `docs/portfolio/demo-script.md`
+- 보안 및 운영 노트: `docs/portfolio/security-ops.md`
+

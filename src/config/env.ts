@@ -13,6 +13,9 @@ const envSchema = z.object({
   MCP_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
   MCP_HOST: z.string().default("0.0.0.0"),
   MCP_PORT: z.coerce.number().int().positive().default(3000),
+  PERSIST_INMEMORY_INDEX: z.enum(["true", "false"]).default("true"),
+  INMEMORY_INDEX_PATH: z.string().default(".data/inmemory-index.json"),
+  MAX_INMEMORY_INDEX_BYTES: z.coerce.number().int().positive().default(20 * 1024 * 1024),
   VECTOR_DIMENSION: z.coerce.number().int().positive().default(1536),
 });
 
@@ -29,6 +32,9 @@ export interface AppConfig {
   transport: "stdio" | "http";
   host: string;
   port: number;
+  persistInMemoryIndex: boolean;
+  inMemoryIndexPath: string;
+  maxInMemoryIndexBytes: number;
   vectorDimension: number;
 }
 
@@ -57,6 +63,9 @@ export function loadConfig(): AppConfig {
     transport: parsed.MCP_TRANSPORT,
     host: parsed.MCP_HOST,
     port: parsed.MCP_PORT,
+    persistInMemoryIndex: parsed.PERSIST_INMEMORY_INDEX === "true",
+    inMemoryIndexPath: parsed.INMEMORY_INDEX_PATH,
+    maxInMemoryIndexBytes: parsed.MAX_INMEMORY_INDEX_BYTES,
     vectorDimension: parsed.VECTOR_DIMENSION,
   };
 }

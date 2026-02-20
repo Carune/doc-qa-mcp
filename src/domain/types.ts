@@ -10,10 +10,16 @@ export interface ChunkRecord {
   sourceId: string;
   index: number;
   text: string;
+  embedding?: number[] | null;
 }
 
 export interface SearchResult {
   chunk: ChunkRecord;
   source: SourceRecord;
   score: number;
+}
+
+export interface SourceChunkRecord {
+  source: SourceRecord;
+  chunk: ChunkRecord;
 }

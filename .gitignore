@@ -34,3 +34,6 @@ bin/
 node_modules/
 dist/
 .env
+.data/
+.tmp-tests/
+.benchmarks/

@@ -1,4 +1,5 @@
 import { SearchResult } from "../domain/types.js";
+import { isBroadQueryIntent } from "../utils/text.js";
 
 export interface Citation {
   source: string;
@@ -28,12 +29,24 @@ export function buildAnswerWithCitations(
     snippet: hit.chunk.text.slice(0, 280),
   }));
 
+  const broadIntent = isBroadQueryIntent(question);
   const lines = [`Question: ${question}`, "Context-grounded summary:"];
-  for (let i = 0; i < Math.min(hits.length, 3); i += 1) {
+  const lineLimit = broadIntent ? Math.min(hits.length, 6) : Math.min(hits.length, 3);
+  for (let i = 0; i < lineLimit; i += 1) {
     const hit = hits[i];
     lines.push(
       `${i + 1}. ${summarizeChunk(hit.chunk.text)} (source: ${hit.source.path}#${hit.chunk.index})`,
     );
+  }
+
+  if (broadIntent) {
+    const structured = extractStructuredItems(hits, 8);
+    if (structured.length > 0) {
+      lines.push("Key structured items:");
+      for (const item of structured) {
+        lines.push(`- ${item}`);
+      }
+    }
   }
 
   return {
@@ -48,4 +61,38 @@ function summarizeChunk(text: string): string {
     return normalized;
   }
   return `${normalized.slice(0, 177)}...`;
+}
+
+function extractStructuredItems(hits: SearchResult[], limit: number): string[] {
+  const lines: string[] = [];
+
+  for (const hit of hits) {
+    const rawLines = hit.chunk.text.split("\n");
+    for (const rawLine of rawLines) {
+      const line = rawLine.trim();
+      if (!line) {
+        continue;
+      }
+      if (line.length < 3) {
+        continue;
+      }
+      if (
+        /^[-*]\s+/.test(line) ||
+        /^\d+\.\s+/.test(line) ||
+        /^<[^>]{2,80}>$/.test(line) ||
+        /\([A-Z_]+\)/.test(line)
+      ) {
+        lines.push(line);
+      }
+      if (lines.length >= limit) {
+        return dedupe(lines).slice(0, limit);
+      }
+    }
+  }
+
+  return dedupe(lines).slice(0, limit);
+}
+
+function dedupe(values: string[]): string[] {
+  return values.filter((value, index) => values.indexOf(value) === index);
 }

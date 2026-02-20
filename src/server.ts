@@ -10,6 +10,7 @@ import "dotenv/config";
 import { z } from "zod";
 import { loadConfig } from "./config/env.js";
 import { DefaultAiClient } from "./infra/ai/defaultAiClient.js";
+import { RetrievedContext } from "./infra/ai/types.js";
 import { createKnowledgeBase } from "./infra/store/createKnowledgeBase.js";
 import { DocumentQaService } from "./services/documentQaService.js";
 import { registerIndexDocumentsTool } from "./tools/indexDocuments.js";
@@ -40,6 +41,16 @@ const indexTextApiSchema = z.object({
     )
     .min(1),
 });
+const indexUploadApiSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        source: z.string().min(1),
+        content_base64: z.string().min(1),
+      }),
+    )
+    .min(1),
+});
 const searchApiSchema = z.object({
   query: z.string().min(2),
   top_k: z.number().int().min(1).max(20).optional(),
@@ -49,6 +60,11 @@ const askApiSchema = z.object({
   question: z.string().min(2),
   top_k: z.number().int().min(1).max(10).optional(),
   source_filter: z.array(z.string()).optional(),
+});
+const summarizeApiSchema = z.object({
+  instruction: z.string().min(2).optional(),
+  source_filter: z.array(z.string()).optional(),
+  max_chunks: z.number().int().min(10).max(300).optional(),
 });
 
 async function main() {
@@ -69,6 +85,7 @@ async function main() {
     const stopHttpServer = await runHttpServer(config.host, config.port, () =>
       createAppServer(qaService),
       qaService,
+      aiClient,
     );
     shutdownTasks.unshift(stopHttpServer);
     console.error(`MCP HTTP server listening on http://${config.host}:${config.port}${MCP_PATH}`);
@@ -135,6 +152,7 @@ async function runHttpServer(
   port: number,
   serverFactory: () => McpServer,
   qaService: DocumentQaService,
+  aiClient: DefaultAiClient,
 ): Promise<() => Promise<void>> {
   const sessions: SessionMap = {};
 
@@ -154,7 +172,7 @@ async function runHttpServer(
       }
 
       if (url.pathname.startsWith(API_PREFIX)) {
-        await handleApiRequest(url.pathname, req, res, qaService);
+        await handleApiRequest(url.pathname, req, res, qaService, aiClient);
         return;
       }
 
@@ -219,10 +237,20 @@ async function handleApiRequest(
   req: IncomingMessage,
   res: ServerResponse,
   qaService: DocumentQaService,
+  aiClient: DefaultAiClient,
 ) {
   if (pathname === "/api/sources" && req.method === "GET") {
     const sources = await qaService.listSources();
     writeJson(res, 200, { sources });
+    return;
+  }
+
+  if (pathname === "/api/index/storage" && req.method === "GET") {
+    const storage = await qaService.getIndexStorageInfo();
+    writeJson(res, 200, {
+      storage,
+      persisted: Boolean(storage),
+    });
     return;
   }
 
@@ -244,6 +272,12 @@ async function handleApiRequest(
     return;
   }
 
+  if (pathname === "/api/index/reset") {
+    const result = await qaService.resetIndex();
+    writeJson(res, 200, result);
+    return;
+  }
+
   if (pathname === "/api/index-text") {
     const parsed = indexTextApiSchema.safeParse(body);
     if (!parsed.success) {
@@ -251,6 +285,22 @@ async function handleApiRequest(
       return;
     }
     const result = await qaService.indexRawDocuments(parsed.data.documents);
+    writeJson(res, 200, result);
+    return;
+  }
+
+  if (pathname === "/api/index-upload") {
+    const parsed = indexUploadApiSchema.safeParse(body);
+    if (!parsed.success) {
+      writeJson(res, 400, { error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+    const result = await qaService.indexUploadedDocuments(
+      parsed.data.files.map((file) => ({
+        source: file.source,
+        contentBase64: file.content_base64,
+      })),
+    );
     writeJson(res, 200, result);
     return;
   }
@@ -285,7 +335,161 @@ async function handleApiRequest(
     return;
   }
 
+  if (pathname === "/api/summarize") {
+    const parsed = summarizeApiSchema.safeParse(body);
+    if (!parsed.success) {
+      writeJson(res, 400, { error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+    const result = await qaService.summarizeDocuments({
+      instruction: parsed.data.instruction,
+      sourceFilter: parsed.data.source_filter,
+      maxChunks: parsed.data.max_chunks,
+    });
+    writeJson(res, 200, result);
+    return;
+  }
+
+  if (pathname === "/api/ask-stream") {
+    const parsed = askApiSchema.safeParse(body);
+    if (!parsed.success) {
+      writeJson(res, 400, { error: parsed.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+    await handleAskStream(res, qaService, aiClient, parsed.data);
+    return;
+  }
+
   writeJson(res, 404, { error: "API route not found" });
+}
+
+async function handleAskStream(
+  res: ServerResponse,
+  qaService: DocumentQaService,
+  aiClient: DefaultAiClient,
+  input: {
+    question: string;
+    top_k?: number;
+    source_filter?: string[];
+  },
+) {
+  const startedAt = Date.now();
+  writeSseHeaders(res);
+
+  const topK = input.top_k ?? 3;
+  if (shouldUseDeterministicStructuredAnswer(input.question)) {
+    const deterministic = await qaService.askWithCitations({
+      question: input.question,
+      topK,
+      sourceFilter: input.source_filter,
+    });
+
+    writeSse(res, "meta", {
+      answer_generation_mode: deterministic.answer_generation_mode,
+      retrieval_mode: deterministic.retrieval_mode,
+      guidance: deterministic.guidance,
+      citations: deterministic.citations,
+    });
+
+    writeSse(res, "done", {
+      ...deterministic,
+      latency_ms: Date.now() - startedAt,
+    });
+    res.end();
+    return;
+  }
+
+  const retrieved = await qaService.retrieveForAsk({
+    question: input.question,
+    topK,
+    sourceFilter: input.source_filter,
+  });
+
+  const citations = retrieved.hits.map((hit) => ({
+    source: hit.source.path,
+    chunk_id: hit.chunk.id,
+    chunk_index: hit.chunk.index,
+    score: Number(hit.score.toFixed(4)),
+    snippet: hit.chunk.text.slice(0, 280),
+  }));
+
+  writeSse(res, "meta", {
+    answer_generation_mode: aiClient.supportsStreamingAnswer() ? "ollama" : "client_llm",
+    retrieval_mode: retrieved.retrievalMode,
+    guidance: retrieved.guidance,
+    citations,
+  });
+
+  if (citations.length === 0) {
+    writeSse(res, "done", {
+      answer:
+        "No relevant context was found in indexed documents. Try a more specific question.",
+      citations,
+      answer_generation_mode: "client_llm",
+      retrieval_mode: retrieved.retrievalMode,
+      guidance: retrieved.guidance,
+      latency_ms: Date.now() - startedAt,
+    });
+    res.end();
+    return;
+  }
+
+  if (!aiClient.supportsStreamingAnswer()) {
+    const result = await qaService.askWithCitations({
+      question: input.question,
+      topK,
+      sourceFilter: input.source_filter,
+    });
+
+    writeSse(res, "done", result);
+    res.end();
+    return;
+  }
+
+  const contexts: RetrievedContext[] = qaService.createGroundingContexts(
+    input.question,
+    retrieved.hits,
+  );
+
+  let answer = "";
+  try {
+    const generated = await aiClient.streamGroundedAnswer(
+      input.question,
+      contexts,
+      (token) => {
+        answer += token;
+        writeSse(res, "token", { token });
+      },
+    );
+    if (generated && !answer.trim()) {
+      answer = generated;
+    }
+  } catch (error) {
+    writeSse(res, "error", {
+      message: error instanceof Error ? error.message : "streaming failed",
+    });
+  }
+
+  if (!answer.trim()) {
+    const fallback = await qaService.askWithCitations({
+      question: input.question,
+      topK,
+      sourceFilter: input.source_filter,
+    });
+    writeSse(res, "done", fallback);
+    res.end();
+    return;
+  }
+
+  writeSse(res, "done", {
+    answer,
+    citations,
+    answer_generation_mode: "ollama",
+    retrieval_mode: retrieved.retrievalMode,
+    guidance: retrieved.guidance,
+    latency_ms: Date.now() - startedAt,
+  });
+  res.end();
 }
 
 async function handleMcpPost(
@@ -405,6 +609,30 @@ function writeJsonRpcError(
 function writeJson(res: ServerResponse, statusCode: number, payload: unknown) {
   res.writeHead(statusCode, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
+}
+
+function writeSseHeaders(res: ServerResponse) {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+}
+
+function writeSse(res: ServerResponse, event: string, payload: unknown) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function shouldUseDeterministicStructuredAnswer(question: string): boolean {
+  const q = question.toLowerCase();
+  return (
+    /(?:\uBAA9\uB85D|\uC885\uB958|\uD56D\uBAA9|\uBA54\uB274|\uC0AC\uC774\uB4DC\s*\uBA54\uB274|\uD14C\uC774\uBE14|\uC2A4\uD0A4\uB9C8|\uAD6C\uC131|\uAD6C\uC870|\uAC1C\uCCB4)/u.test(
+      q,
+    ) ||
+    /\b(list|types|items|menu|table|schema|structure|entity|erd)\b/.test(q)
+  );
 }
 
 async function serveFile(

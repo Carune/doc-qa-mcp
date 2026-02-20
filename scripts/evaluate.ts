@@ -26,6 +26,9 @@ async function main() {
       transport: "http",
       host: "127.0.0.1",
       port: 3000,
+      persistInMemoryIndex: false,
+      inMemoryIndexPath: ".data/inmemory-index.json",
+      maxInMemoryIndexBytes: 20 * 1024 * 1024,
       vectorDimension: 1536,
     }),
   );
@@ -39,6 +42,7 @@ async function main() {
   const rows: Array<{
     question: string;
     top_citation_ok: boolean;
+    top3_citation_ok: boolean;
     keyword_hit: boolean;
     latency_ms: number;
   }> = [];
@@ -51,6 +55,9 @@ async function main() {
 
     const topCitation = result.citations[0]?.source ?? "";
     const topCitationOk = topCitation.includes(item.expected_source_contains);
+    const top3CitationOk = result.citations
+      .slice(0, 3)
+      .some((citation) => citation.source.includes(item.expected_source_contains));
     const answerLower = result.answer.toLowerCase();
     const keywordHit = item.expected_keywords.some((keyword) =>
       answerLower.includes(keyword.toLowerCase()),
@@ -59,6 +66,7 @@ async function main() {
     rows.push({
       question: item.question,
       top_citation_ok: topCitationOk,
+      top3_citation_ok: top3CitationOk,
       keyword_hit: keywordHit,
       latency_ms: result.latency_ms,
     });
@@ -66,6 +74,10 @@ async function main() {
 
   const citationHitRate = ratio(
     rows.filter((row) => row.top_citation_ok).length,
+    rows.length,
+  );
+  const top3CitationHitRate = ratio(
+    rows.filter((row) => row.top3_citation_ok).length,
     rows.length,
   );
   const keywordHitRate = ratio(
@@ -80,6 +92,7 @@ async function main() {
   console.log("==================");
   console.log(`questions: ${rows.length}`);
   console.log(`top_citation_hit_rate: ${citationHitRate}`);
+  console.log(`top3_citation_hit_rate: ${top3CitationHitRate}`);
   console.log(`keyword_hit_rate: ${keywordHitRate}`);
   console.log(`avg_latency_ms: ${avgLatencyMs}`);
   console.log("");
@@ -87,7 +100,7 @@ async function main() {
   console.log("------------");
   for (const row of rows) {
     console.log(
-      `- ${row.question} | citation=${row.top_citation_ok} | keyword=${row.keyword_hit} | latency=${row.latency_ms}ms`,
+      `- ${row.question} | top1=${row.top_citation_ok} | top3=${row.top3_citation_ok} | keyword=${row.keyword_hit} | latency=${row.latency_ms}ms`,
     );
   }
 }

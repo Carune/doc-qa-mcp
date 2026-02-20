@@ -1,4 +1,4 @@
-import { SearchResult, SourceRecord } from "./types.js";
+import { SearchResult, SourceChunkRecord, SourceRecord } from "./types.js";
 
 export interface IndexedChunkInput {
   index: number;
@@ -18,8 +18,15 @@ export interface SearchInput {
   sourcePaths?: string[];
 }
 
+export interface ListChunksInput {
+  sourcePaths?: string[];
+  limit?: number;
+}
+
 export interface KnowledgeBase {
   upsertSource(input: UpsertSourceInput): Promise<SourceRecord>;
   listSources(): Promise<SourceRecord[]>;
   search(input: SearchInput): Promise<SearchResult[]>;
+  listChunks(input?: ListChunksInput): Promise<SourceChunkRecord[]>;
+  clear(): Promise<{ cleared_sources: number; cleared_chunks: number }>;
 }
